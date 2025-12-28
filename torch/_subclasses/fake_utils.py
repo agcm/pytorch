@@ -54,6 +54,12 @@ def _check_alias_info(context, real_out, real_in, fake_out, fake_in):
     r_aliasing = outputs_alias_inputs(real_out, real_in)
     f_aliasing = outputs_alias_inputs(fake_out, fake_in)
     if r_aliasing != f_aliasing:
+        # Skip mismatch for zero-sized view on ROCm (Issue 159150)
+        is_view = isinstance(context, str) and "aten.view.default" in context
+        has_zero_size = any(t.numel() == 0 for t in tree_flatten_only(torch.Tensor, real_out))
+        if is_view and has_zero_size and torch.version.hip:
+            return
+
         raise MetadataMismatchError(
             f"{context} mismatch in outputs_alias_inputs check {f_aliasing} != {r_aliasing}"
         )
